@@ -1,266 +1,251 @@
 <?php
 
-class Paymentwall_Pingback extends Paymentwall_Instance
+namespace Paymentwall;
+
+class Pingback extends Instance
 {
-	const PINGBACK_TYPE_REGULAR = 0;
-	const PINGBACK_TYPE_GOODWILL = 1;
-	const PINGBACK_TYPE_NEGATIVE = 2;
+    public const PINGBACK_TYPE_REGULAR = 0;
+    public const PINGBACK_TYPE_GOODWILL = 1;
+    public const PINGBACK_TYPE_NEGATIVE = 2;
 
-	const PINGBACK_TYPE_RISK_UNDER_REVIEW = 200;
-	const PINGBACK_TYPE_RISK_REVIEWED_ACCEPTED = 201;
-	const PINGBACK_TYPE_RISK_REVIEWED_DECLINED = 202;
+    public const PINGBACK_TYPE_RISK_UNDER_REVIEW = 200;
+    public const PINGBACK_TYPE_RISK_REVIEWED_ACCEPTED = 201;
+    public const PINGBACK_TYPE_RISK_REVIEWED_DECLINED = 202;
 
-	const PINGBACK_TYPE_RISK_AUTHORIZATION_VOIDED = 203;
+    public const PINGBACK_TYPE_RISK_AUTHORIZATION_VOIDED = 203;
 
-	const PINGBACK_TYPE_SUBSCRIPTION_CANCELLATION = 12;
-	const PINGBACK_TYPE_SUBSCRIPTION_EXPIRED = 13;
-	const PINGBACK_TYPE_SUBSCRIPTION_PAYMENT_FAILED = 14;
+    public const PINGBACK_TYPE_SUBSCRIPTION_CANCELLATION = 12;
+    public const PINGBACK_TYPE_SUBSCRIPTION_EXPIRED = 13;
+    public const PINGBACK_TYPE_SUBSCRIPTION_PAYMENT_FAILED = 14;
 
-	protected $parameters;
-	protected $ipAddress;
+    public function __construct(protected array $parameters, protected string $ipAddress)
+    {
+    }
 
-	public function __construct(array $parameters, $ipAddress)
-	{
-		$this->parameters = $parameters;
-		$this->ipAddress = $ipAddress;
-	}
+    public function validate(bool $skipIpWhitelistCheck = false): bool
+    {
+        $validated = false;
 
-	public function validate($skipIpWhitelistCheck = false)
-	{
-		$validated = false;
+        if ($this->isParametersValid()) {
+            if ($skipIpWhitelistCheck || $this->isIpAddressValid()) {
+                if ($this->isSignatureValid()) {
+                    $validated = true;
+                } else {
+                    $this->appendToErrors('Wrong signature');
+                }
+            } else {
+                $this->appendToErrors('IP address is not whitelisted');
+            }
+        } else {
+            $this->appendToErrors('Missing parameters');
+        }
 
-		if ($this->isParametersValid()) {
+        return $validated;
+    }
 
-			if ($skipIpWhitelistCheck || $this->isIpAddressValid()) {
+    public function isSignatureValid(): bool
+    {
+        $signatureParamsToSign = [];
 
-				if ($this->isSignatureValid()) {
+        if ($this->getApiType() == Config::API_VC) {
+            $signatureParams = ['uid', 'currency', 'type', 'ref'];
+        } elseif ($this->getApiType() == Config::API_GOODS) {
+            $signatureParams = ['uid', 'goodsid', 'slength', 'speriod', 'type', 'ref'];
+        } else { // API_CART
+            $signatureParams = ['uid', 'goodsid', 'type', 'ref'];
 
-					$validated = true;
+            $this->parameters['sign_version'] = Signature\Signature::VERSION_TWO;
+        }
 
-				} else {
-					$this->appendToErrors('Wrong signature');
-				}
+        if (empty($this->parameters['sign_version']) || $this->parameters['sign_version'] == Signature\Signature::VERSION_ONE) {
+            foreach ($signatureParams as $field) {
+                $signatureParamsToSign[$field] = $this->parameters[$field] ?? null;
+            }
 
-			} else {
-				$this->appendToErrors('IP address is not whitelisted');
-			}
+            $this->parameters['sign_version'] = Signature\Signature::VERSION_ONE;
+        } else {
+            $signatureParamsToSign = $this->parameters;
+        }
 
-		} else {
-			$this->appendToErrors('Missing parameters');
-		}
+        $pingbackSignatureModel = new Signature\Pingback();
+        $signatureCalculated = $pingbackSignatureModel->calculate(
+            $signatureParamsToSign,
+            $this->parameters['sign_version']
+        );
 
-		return $validated;
-	}
+        $signature = $this->parameters['sig'] ?? null;
 
-	public function isSignatureValid()
-	{
-		$signatureParamsToSign = [];
+        return $signature == $signatureCalculated;
+    }
 
-		if ($this->getApiType() == Paymentwall_Config::API_VC) {
+    public function isIpAddressValid(): bool
+    {
+        $ipsWhitelist = [
+            '174.36.92.186',
+            '174.36.96.66',
+            '174.36.92.187',
+            '174.36.92.192',
+            '174.37.14.28',
+        ];
 
-			$signatureParams = ['uid', 'currency', 'type', 'ref'];
+        $rangesWhitelist = [
+            '216.127.71.0/24',
+        ];
 
-		} else if ($this->getApiType() == Paymentwall_Config::API_GOODS) {
+        if (in_array($this->ipAddress, $ipsWhitelist)) {
+            return true;
+        }
 
-			$signatureParams = ['uid', 'goodsid', 'slength', 'speriod', 'type', 'ref'];
+        foreach ($rangesWhitelist as $range) {
+            if ($this->isCidrMatched($this->ipAddress, $range)) {
+                return true;
+            }
+        }
 
-		} else { // API_CART
+        return false;
+    }
 
-			$signatureParams = ['uid', 'goodsid', 'type', 'ref'];
+    public function isCidrMatched($ip, $range): bool
+    {
+        [$subnet, $bits] = explode('/', $range);
+        $ip = ip2long($ip);
+        $subnet = ip2long($subnet);
+        $mask = -1 << (32 - $bits);
+        $subnet &= $mask;
+        return ($ip & $mask) == $subnet;
+    }
 
-			$this->parameters['sign_version'] = Paymentwall_Signature_Abstract::VERSION_TWO;
+    public function isParametersValid(): bool
+    {
+        $errorsNumber = 0;
 
-		}
+        if ($this->getApiType() == Config::API_VC) {
+            $requiredParams = ['uid', 'currency', 'type', 'ref', 'sig'];
+        } elseif ($this->getApiType() == Config::API_GOODS) {
+            $requiredParams = ['uid', 'goodsid', 'type', 'ref', 'sig'];
+        } else { // Cart API
+            $requiredParams = ['uid', 'goodsid', 'type', 'ref', 'sig'];
+        }
 
-		if (empty($this->parameters['sign_version']) || $this->parameters['sign_version'] == Paymentwall_Signature_Abstract::VERSION_ONE) {
+        foreach ($requiredParams as $field) {
+            if (!isset($this->parameters[$field]) || $this->parameters[$field] === '') {
+                $this->appendToErrors('Parameter ' . $field . ' is missing');
+                $errorsNumber++;
+            }
+        }
 
-			foreach ($signatureParams as $field) {
-				$signatureParamsToSign[$field] = isset($this->parameters[$field]) ? $this->parameters[$field] : null;
-			}
+        return $errorsNumber == 0;
+    }
 
-			$this->parameters['sign_version'] = Paymentwall_Signature_Abstract::VERSION_ONE;
+    public function getParameter($param): mixed
+    {
+        return $this->parameters[$param] ?? null;
+    }
 
-		} else {
-			$signatureParamsToSign = $this->parameters;
-		}
+    public function getType(): ?int
+    {
+        return isset($this->parameters['type']) ? intval($this->parameters['type']) : null;
+    }
 
-		$pingbackSignatureModel = new Paymentwall_Signature_Pingback();
-		$signatureCalculated = $pingbackSignatureModel->calculate(
-			$signatureParamsToSign,
-			$this->parameters['sign_version']
-		);
+    public function getTypeVerbal(): string
+    {
+        $typeVerbal = '';
+        $pingbackTypes = [
+            self::PINGBACK_TYPE_SUBSCRIPTION_CANCELLATION => 'user_subscription_cancellation',
+            self::PINGBACK_TYPE_SUBSCRIPTION_EXPIRED => 'user_subscription_expired',
+            self::PINGBACK_TYPE_SUBSCRIPTION_PAYMENT_FAILED => 'user_subscription_payment_failed',
+        ];
 
-		$signature = isset($this->parameters['sig']) ? $this->parameters['sig'] : null;
+        if (!empty($this->parameters['type'])) {
+            if (array_key_exists($this->parameters['type'], $pingbackTypes)) {
+                $typeVerbal = $pingbackTypes[$this->parameters['type']];
+            }
+        }
 
-		return $signature == $signatureCalculated;
-	}
+        return $typeVerbal;
+    }
 
-	public function isIpAddressValid()
-	{
-		$ipsWhitelist = [
-			'174.36.92.186',
-			'174.36.96.66',
-			'174.36.92.187',
-			'174.36.92.192',
-			'174.37.14.28'
-		];
+    public function getUserId(): string
+    {
+        return $this->getParameter('uid');
+    }
 
-		$rangesWhitelist = [
-			'216.127.71.0/24'
-		];
+    public function getVirtualCurrencyAmount(): string
+    {
+        return $this->getParameter('currency');
+    }
 
-		if (in_array($this->ipAddress, $ipsWhitelist)) {
-			return true;
-		}
-		
-		foreach ($rangesWhitelist as $range) {
-			if ($this->isCidrMatched($this->ipAddress, $range)) {
-				return true;
-			}
-		}
+    public function getProductId(): string
+    {
+        return $this->getParameter('goodsid');
+    }
 
-		return false;
-	}
+    public function getProductPeriodLength(): string
+    {
+        return $this->getParameter('slength');
+    }
 
-	public function isCidrMatched($ip, $range)
-	{
-	    list($subnet, $bits) = explode('/', $range);
-	    $ip = ip2long($ip);
-	    $subnet = ip2long($subnet);
-	    $mask = -1 << (32 - $bits);
-	    $subnet &= $mask;
-	    return ($ip & $mask) == $subnet;
-	}
+    public function getProductPeriodType(): string
+    {
+        return $this->getParameter('speriod');
+    }
 
-	public function isParametersValid()
-	{
-		$errorsNumber = 0;
+    public function getProduct(): Product
+    {
+        return new Product(
+            $this->getProductId(),
+            0,
+            null,
+            null,
+            $this->getProductPeriodLength() > 0 ? Product::TYPE_SUBSCRIPTION : Product::TYPE_FIXED,
+            $this->getProductPeriodLength(),
+            $this->getProductPeriodType()
+        );
+    }
 
-		if ($this->getApiType() == Paymentwall_Config::API_VC) {
-			$requiredParams = ['uid', 'currency', 'type', 'ref', 'sig'];
-		} else if ($this->getApiType() == Paymentwall_Config::API_GOODS) {
-			$requiredParams = ['uid', 'goodsid', 'type', 'ref', 'sig'];
-		} else { // Cart API
-			$requiredParams = ['uid', 'goodsid', 'type', 'ref', 'sig'];
-		}
+    public function getProducts(): array
+    {
+        $result = [];
+        $productIds = $this->getParameter('goodsid');
 
-		foreach ($requiredParams as $field) {
-			if (!isset($this->parameters[$field]) || $this->parameters[$field] === '') {
-				$this->appendToErrors('Parameter ' . $field . ' is missing');
-				$errorsNumber++;
-			}
-		}
+        if (!empty($productIds) && is_array($productIds)) {
+            foreach ($productIds as $Id) {
+                $result[] = new Product($Id);
+            }
+        }
 
-		return $errorsNumber == 0;
-	}
+        return $result;
+    }
 
-	public function getParameter($param)
-	{
-		return isset($this->parameters[$param]) ? $this->parameters[$param] : null;
-	}
+    public function getReferenceId(): string
+    {
+        return $this->getParameter('ref');
+    }
 
-	public function getType()
-	{
-		return isset($this->parameters['type']) ? intval($this->parameters['type']) : null;
-	}
+    public function getPingbackUniqueId(): string
+    {
+        return $this->getReferenceId() . '_' . $this->getType();
+    }
 
-	public function getTypeVerbal() {
-		$typeVerbal = '';
-		$pingbackTypes = [
-			self::PINGBACK_TYPE_SUBSCRIPTION_CANCELLATION => 'user_subscription_cancellation',
-			self::PINGBACK_TYPE_SUBSCRIPTION_EXPIRED => 'user_subscription_expired',
-			self::PINGBACK_TYPE_SUBSCRIPTION_PAYMENT_FAILED => 'user_subscription_payment_failed'
-		];
+    public function isDeliverable(): bool
+    {
+        return (
+            $this->getType() === self::PINGBACK_TYPE_REGULAR ||
+            $this->getType() === self::PINGBACK_TYPE_GOODWILL ||
+            $this->getType() === self::PINGBACK_TYPE_RISK_REVIEWED_ACCEPTED
+        );
+    }
 
-		if (!empty($this->parameters['type'])) {
-			if (array_key_exists($this->parameters['type'], $pingbackTypes)) {
-				$typeVerbal = $pingbackTypes[$this->parameters['type']];
-			}
-		}
+    public function isCancelable(): bool
+    {
+        return (
+            $this->getType() === self::PINGBACK_TYPE_NEGATIVE
+            || $this->getType() === self::PINGBACK_TYPE_RISK_REVIEWED_DECLINED
+        );
+    }
 
-		return $typeVerbal;
-	}
-
-	public function getUserId()
-	{
-		return $this->getParameter('uid');
-	}
-
-	public function getVirtualCurrencyAmount()
-	{
-		return $this->getParameter('currency');
-	}
-
-	public function getProductId()
-	{
-		return $this->getParameter('goodsid');
-	}
-
-	public function getProductPeriodLength()
-	{
-		return $this->getParameter('slength');
-	}
-
-	public function getProductPeriodType()
-	{
-		return $this->getParameter('speriod');
-	}
-
-	public function getProduct() {
-		return new Paymentwall_Product(
-			$this->getProductId(),
-			0,
-			null,
-			null,
-			$this->getProductPeriodLength() > 0 ? Paymentwall_Product::TYPE_SUBSCRIPTION : Paymentwall_Product::TYPE_FIXED,
-			$this->getProductPeriodLength(),
-			$this->getProductPeriodType()
-		);
-	}
-
-	public function getProducts() {
-		$result = [];
-		$productIds = $this->getParameter('goodsid');
-
-		if (!empty($productIds) && is_array($productIds)) {
-			foreach ($productIds as $Id) {
-				$result[] = new Paymentwall_Product($Id);
-			}
-		}
-
-		return $result;
-	}
-
-	public function getReferenceId()
-	{
-		return $this->getParameter('ref');
-	}
-
-	public function getPingbackUniqueId()
-	{
-		return $this->getReferenceId() . '_' . $this->getType();
-	}
-
-	public function isDeliverable()
-	{
-		return (
-			$this->getType() === self::PINGBACK_TYPE_REGULAR ||
-			$this->getType() === self::PINGBACK_TYPE_GOODWILL ||
-			$this->getType() === self::PINGBACK_TYPE_RISK_REVIEWED_ACCEPTED
-		);
-	}
-
-	public function isCancelable()
-	{
-		return (
-			$this->getType() === self::PINGBACK_TYPE_NEGATIVE
-			|| $this->getType() === self::PINGBACK_TYPE_RISK_REVIEWED_DECLINED
-		);
-	}
-
-	public function isUnderReview() {
-		return $this->getType() === self::PINGBACK_TYPE_RISK_UNDER_REVIEW;
-	}
-
-
+    public function isUnderReview(): bool
+    {
+        return $this->getType() === self::PINGBACK_TYPE_RISK_UNDER_REVIEW;
+    }
 }

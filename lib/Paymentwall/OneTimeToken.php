@@ -1,31 +1,33 @@
 <?php
 
-class Paymentwall_OneTimeToken extends Paymentwall_ApiObject
+namespace Paymentwall;
+
+class OneTimeToken extends ApiObject
 {
-	const GATEWAY_TOKENIZATION_URL = 'https://pwgateway.com/api/token';
+    public const GATEWAY_TOKENIZATION_URL = 'https://pwgateway.com/api/token';
 
-	public function getToken()
-	{
-		return $this->token;
-	}
+    public function getToken(): ?string
+    {
+        return $this->token;
+    }
 
-	public function isTest()
-	{
-		return $this->test;
-	}
+    public function isTest(): ?bool
+    {
+        return $this->test;
+    }
 
-	public function isActive()
-	{
-		return $this->active;
-	}
+    public function isActive(): ?bool
+    {
+        return $this->active;
+    }
 
-	public function getExpirationTime()
-	{
-		return $this->expires_in;
-	}
+    public function getExpirationTime(): ?int
+    {
+        return $this->expires_in;
+    }
 
-	public function getEndpointName()
-	{
-		return self::API_OBJECT_ONE_TIME_TOKEN;
-	}
+    public function getEndpointName(): string
+    {
+        return ApiObject::API_OBJECT_ONE_TIME_TOKEN;
+    }
 }

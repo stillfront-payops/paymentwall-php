@@ -1,50 +1,52 @@
 <?php
 
-abstract class Paymentwall_Instance
+namespace Paymentwall;
+
+abstract class Instance
 {
-	protected $config;
-	protected $errors = [];
+    protected Config $config;
+    protected array $errors = [];
 
-	public function getErrorSummary()
-	{
-		return implode("\n", $this->getErrors());
-	}
+    public function getErrorSummary(): string
+    {
+        return implode("\n", $this->getErrors());
+    }
 
-	protected function getConfig()
-	{
-		if (!isset($this->config)) {
-			$this->config = Paymentwall_Config::getInstance();
-		}
-		return $this->config;
-	}
+    protected function getConfig(): Config
+    {
+        if (!isset($this->config)) {
+            $this->config = Config::getInstance();
+        }
+        return $this->config;
+    }
 
-	protected function getApiBaseUrl()
-	{
-		return $this->getConfig()->getApiBaseUrl();
-	}
+    protected function getApiBaseUrl(): string
+    {
+        return $this->getConfig()->getApiBaseUrl();
+    }
 
-	protected function getApiType()
-	{
-		return $this->getConfig()->getLocalApiType();
-	}
+    protected function getApiType(): int
+    {
+        return $this->getConfig()->getLocalApiType();
+    }
 
-	protected function getPublicKey()
-	{
-		return $this->getConfig()->getPublicKey();
-	}
+    protected function getPublicKey(): string
+    {
+        return $this->getConfig()->getPublicKey();
+    }
 
-	protected function getPrivateKey()
-	{
-		return $this->getConfig()->getPrivateKey();
-	}
+    protected function getPrivateKey(): string
+    {
+        return $this->getConfig()->getPrivateKey();
+    }
 
-	protected function appendToErrors($error = '')
-	{
-		$this->errors[] = $error;
-	}
+    protected function appendToErrors($error = ''): void
+    {
+        $this->errors[] = $error;
+    }
 
-	protected function getErrors()
-	{
-		return $this->errors;
-	}
+    protected function getErrors(): array
+    {
+        return $this->errors;
+    }
 }

@@ -1,112 +1,97 @@
 <?php
 
-use Behat\Behat\Context\BehatContext;
+use Behat\Behat\Context\Context;
 
-class ChargeContext extends BehatContext
+class ChargeContext implements Context
 {
-    public function __construct(array $parameters)
-    {
-        $this->token = NULL;
-        $this->chargeId = NULL;
-        $this->cvv = '123';
-    }
+    private $token = null;
+    private $chargeId = null;
+    private $cvv = '123';
 
-    /**
-     * @Given /^CVV code "([^"]*)"$/
-     */
-    public function cvvCode($cvvCode)
+    #[\Behat\Step\Given('CVV code ":cvvCode"')]
+    public function cvvCode($cvvCode): void
     {
         $this->cvv = $cvvCode;
     }
 
-    /**
-     * @Given /^charge ID "([^"]*)"$/
-     */
-    public function chargeId($chargeId)
+    #[\Behat\Step\Given('charge ID ":chargeId"')]
+    public function chargeId($chargeId): void
     {
         $this->chargeId = $chargeId;
     }
 
-    /**
-    * @When /^test token is retrieved$/
-    */
-    public function testTokenIsRetrieved()
+    #[\Behat\Step\When('test token is retrieved')]
+    public function testTokenIsRetrieved(): void
     {
-        $tokenModel = new Paymentwall_OneTimeToken();
+        $tokenModel = new \Paymentwall\OneTimeToken();
         $this->token = $tokenModel->create($this->getTestDetailsForOneTimeToken())->getToken();
-        if (strpos($this->token, 'ot_') === FALSE) {
-            throw new Exception($this->token->getPublicData());
+        if (!str_contains($this->token, 'ot_')) {
+            throw new \Exception($this->token->getPublicData());
         }
     }
 
-    /**
-    * @Then /^charge should be successful$/
-    */
-    public function chargeShouldBeSuccessful()
+    #[\Behat\Step\Then('charge should be successful')]
+    public function chargeShouldBeSuccessful(): void
     {
         $charge = $this->getChargeObject();
         if (!$charge->isSuccessful()) {
-            throw new Exception($charge->getPublicData());
+            throw new \Exception($charge->getPublicData());
         }
     }
 
-    /**
-    * @Then /^charge should be refunded$/
-    */
-    public function chargeShouldBeRefunded()
+    #[\Behat\Step\Then('charge should be refunded')]
+    public function chargeShouldBeRefunded(): void
     {
-        $chargeToBeRefunded = new Paymentwall_Charge($this->chargeId);
+        $chargeToBeRefunded = new \Paymentwall\Charge($this->chargeId);
         if (!$chargeToBeRefunded->refund()->isRefunded()) {
-            throw new Exception($chargeToBeRefunded->getPublicData());
+            throw new \Exception($chargeToBeRefunded->getPublicData());
         }
     }
 
-    /**
-    * @Then /^I see this error message "([^"]*)"$/
-    */
-    public function iSeeThisErrorMessage($errorMessage = '')
+    #[\Behat\Step\Then('I see this error message ":errorMessage"')]
+    public function iSeeThisErrorMessage($errorMessage = ''): void
     {
         $charge = $this->getChargeObject();
-        $errors = json_decode($charge->getPublicData(), TRUE);
-        if (strpos($errorMessage, $errors['error']['message']) === FALSE) {
-            throw new Exception($charge->getPublicData());
+        $errors = json_decode($charge->getPublicData(), true);
+        if (!str_contains($errorMessage, $errors['error']['message'])) {
+            throw new \Exception($charge->getPublicData());
         }
     }
 
-    protected function getChargeObject()
+    protected function getChargeObject(): \Paymentwall\ApiObject
     {
-        $chargeModel = new Paymentwall_Charge();
+        $chargeModel = new \Paymentwall\Charge();
         return $chargeModel->create($this->getTestDetailsForCharge());
     }
 
-    protected function getTestDetailsForCharge()
+    protected function getTestDetailsForCharge(): array
     {
-        return array(
+        return [
             'token' => $this->token,
             'email' => 'test@user.com',
             'currency' => 'USD',
             'amount' => 9.99,
             'browser_domain' => 'https://www.paymentwall.com',
             'browser_ip' => '72.229.28.185',
-            'description' => 'Test Charge'
-        );
+            'description' => 'Test Charge',
+        ];
     }
 
-    protected function getTestDetailsForOneTimeToken()
+    protected function getTestDetailsForOneTimeToken(): array
     {
         return array_merge(
-            array('public_key' => Paymentwall_Config::getInstance()->getPublicKey()),
+            ['public_key' => \Paymentwall\Config::getInstance()->getPublicKey()],
             $this->getTestCardDetails()
         );
     }
 
-    protected function getTestCardDetails()
+    protected function getTestCardDetails(): array
     {
-        return array(
+        return [
             'card[number]' => '4242424242424242',
             'card[exp_month]' => '11',
             'card[exp_year]' => '19',
-            'card[cvv]' => $this->cvv
-        );
+            'card[cvv]' => $this->cvv,
+        ];
     }
 }

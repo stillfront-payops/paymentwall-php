@@ -1,71 +1,38 @@
 <?php
 
-use Behat\Behat\Context\ClosuredContextInterface,
-    Behat\Behat\Context\TranslatedContextInterface,
-    Behat\Behat\Context\BehatContext,
-    Behat\Behat\Exception\PendingException;
-use Behat\Gherkin\Node\PyStringNode,
-    Behat\Gherkin\Node\TableNode;
-
-require_once('lib/paymentwall.php');
-
-//
-// Require 3rd-party libraries here:
-//
-//   require_once 'PHPUnit/Autoload.php';
-//   require_once 'PHPUnit/Framework/Assert/Functions.php';
-//
+use Behat\Behat\Context\Context;
 
 /**
  * Features context.
  */
-class FeatureContext extends BehatContext
+class FeatureContext implements Context
 {
-    /**
-     * Initializes context.
-     * Every scenario gets it's own context object.
-     *
-     * @param array $parameters context parameters (set them up through behat.yml)
-     */
-    public function __construct(array $parameters)
+    public int $apiType;
+
+    #[\Behat\Step\Given('/^Public key "([^"]*)"$/')]
+    public function publicKey($publicKey): void
     {
-        $this->useContext('pingback', new PingbackContext(array()));
-        $this->useContext('widget', new WidgetContext(array()));
-        $this->useContext('charge', new ChargeContext(array()));
+        \Paymentwall\Config::getInstance()->setPublicKey($publicKey);
     }
 
-    /**
-     * @Given /^Public key "([^"]*)"$/
-     */
-    public function publicKey($publicKey)
+    #[\Behat\Step\Given('/^Secret key "([^"]*)"$/')]
+    public function secretKey($secretKey): void
     {
-        Paymentwall_Base::setAppKey($publicKey);
+        \Paymentwall\Config::getInstance()->setPrivateKey($secretKey);
     }
 
-    /**
-     * @Given /^Secret key "([^"]*)"$/
-     */
-    public function secretKey($secretKey)
+    #[\Behat\Step\Given('/^Private key "([^"]*)"$/')]
+    public function privateKey($privateKey): void
     {
-        Paymentwall_Base::setSecretKey($secretKey);
+        \Paymentwall\Config::getInstance()->set([
+            'private_key' => $privateKey,
+        ]);
     }
 
-    /**
-     * @Given /^Private key "([^"]*)"$/
-     */
-    public function privateKey($privateKey)
+    #[\Behat\Step\Given('/^API type "([^"]*)"$/')]
+    public function apiType($apiType): void
     {
-        Paymentwall_Config::getInstance()->set(array(
-            'private_key' => $privateKey
-        ));
-    }
-
-    /**
-     * @Given /^API type "([^"]*)"$/
-     */
-    public function apiType($apiType)
-    {
-        Paymentwall_Base::setApiType($apiType);
+        \Paymentwall\Config::getInstance()->setLocalApiType($apiType);
         $this->apiType = $apiType;
     }
 }

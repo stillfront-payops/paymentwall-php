@@ -1,42 +1,37 @@
 <?php
 
-class Paymentwall_Widget extends Paymentwall_Instance
+namespace Paymentwall;
+
+class Widget extends Instance
 {
-    const CONTROLLER_PAYMENT_VIRTUAL_CURRENCY	= 'ps';
-    const CONTROLLER_PAYMENT_DIGITAL_GOODS		= 'subscription';
-    const CONTROLLER_PAYMENT_CART				= 'cart';
+    public const CONTROLLER_PAYMENT_VIRTUAL_CURRENCY = 'ps';
+    public const CONTROLLER_PAYMENT_DIGITAL_GOODS = 'subscription';
+    public const CONTROLLER_PAYMENT_CART = 'cart';
 
-    protected $userId;
-    protected $widgetCode;
-    protected $products;
-    protected $extraParams;
-
-    public function __construct($userId, $widgetCode = '', $products = [], $extraParams = []) {
-        $this->userId = $userId;
-        $this->widgetCode = $widgetCode;
-        $this->products = $products;
-        $this->extraParams = $extraParams;
+    public function __construct(
+        protected string $userId,
+        protected string $widgetCode = '',
+        protected array $products = [],
+        protected array $extraParams = []
+    ) {
     }
 
-    public function getUrl()
+    public function getUrl(): string
     {
         $params = [
             'key' => $this->getPublicKey(),
             'uid' => $this->userId,
-            'widget' => $this->widgetCode
+            'widget' => $this->widgetCode,
         ];
 
         $productsNumber = count($this->products);
 
-        if ($this->getApiType() == Paymentwall_Config::API_GOODS) {
-
+        if ($this->getApiType() == Config::API_GOODS) {
             if (!empty($this->products)) {
-
                 if ($productsNumber == 1) {
-
                     $product = current($this->products);
 
-                    if ($product->getTrialProduct() instanceof Paymentwall_Product) {
+                    if ($product->getTrialProduct() instanceof Product) {
                         $postTrialProduct = $product;
                         $product = $product->getTrialProduct();
                     }
@@ -47,11 +42,10 @@ class Paymentwall_Widget extends Paymentwall_Instance
                     $params['ag_external_id'] = $product->getId();
                     $params['ag_type'] = $product->getType();
 
-                    if ($product->getType() == Paymentwall_Product::TYPE_SUBSCRIPTION) {
+                    if ($product->getType() == Product::TYPE_SUBSCRIPTION) {
                         $params['ag_period_length'] = $product->getPeriodLength();
                         $params['ag_period_type'] = $product->getPeriodType();
                         if ($product->isRecurring()) {
-
                             $params['ag_recurring'] = intval($product->isRecurring());
 
                             if (isset($postTrialProduct)) {
@@ -63,18 +57,13 @@ class Paymentwall_Widget extends Paymentwall_Instance
                                 $params['post_trial_amount'] = $postTrialProduct->getAmount();
                                 $params['post_trial_currencyCode'] = $postTrialProduct->getCurrencyCode();
                             }
-
                         }
                     }
-
                 } else {
                     //TODO: $this->appendToErrors('Only 1 product is allowed in flexible widget call');
                 }
-
             }
-
-        } else if ($this->getApiType() == Paymentwall_Config::API_CART) {
-
+        } elseif ($this->getApiType() == Config::API_CART) {
             $external_ids = [];
             $prices       = [];
             $currencies   = [];
@@ -105,7 +94,7 @@ class Paymentwall_Widget extends Paymentwall_Instance
 
         $params = array_merge($params, $this->extraParams);
 
-        $widgetSignatureModel = new Paymentwall_Signature_Widget();
+        $widgetSignatureModel = new Signature\Widget();
         $params['sign'] = $widgetSignatureModel->calculate(
             $params,
             $signatureVersion
@@ -114,12 +103,12 @@ class Paymentwall_Widget extends Paymentwall_Instance
         return $this->getApiBaseUrl() . '/' . $this->buildController($this->widgetCode) . '?' . http_build_query($params);
     }
 
-    public function getHtmlCode($attributes = [])
+    public function getHtmlCode(array $attributes = []): string
     {
         $defaultAttributes = [
             'frameborder' => '0',
             'width' => '750',
-            'height' => '800'
+            'height' => '800',
         ];
 
         $attributes = array_merge($defaultAttributes, $attributes);
@@ -130,23 +119,23 @@ class Paymentwall_Widget extends Paymentwall_Instance
         }
 
         return '<iframe src="' . $this->getUrl() . '" ' . $attributesQuery . '></iframe>';
-
     }
 
-    protected function getDefaultSignatureVersion() {
-        return $this->getApiType() != Paymentwall_Config::API_CART ? Paymentwall_Signature_Abstract::DEFAULT_VERSION : Paymentwall_Signature_Abstract::VERSION_TWO;
+    protected function getDefaultSignatureVersion(): int
+    {
+        return $this->getApiType() != Config::API_CART ? \Paymentwall\Signature\Signature::DEFAULT_VERSION : \Paymentwall\Signature\Signature::VERSION_TWO;
     }
 
-    protected function buildController($widget = '')
+    protected function buildController($widget = ''): ?string
     {
         $controller = null;
         $isPaymentWidget = !preg_match('/^w|s|mw/', $widget);
 
-        if ($this->getApiType()== Paymentwall_Config::API_VC) {
+        if ($this->getApiType() == Config::API_VC) {
             if ($isPaymentWidget) {
                 $controller = self::CONTROLLER_PAYMENT_VIRTUAL_CURRENCY;
             }
-        } else if ($this->getApiType() == Paymentwall_Config::API_GOODS) {
+        } elseif ($this->getApiType() == Config::API_GOODS) {
             /**
              * @todo cover case with offer widget for digital goods for non-flexible widget call
              */

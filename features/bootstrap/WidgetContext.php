@@ -1,162 +1,136 @@
 <?php
 
-use Behat\Behat\Context\BehatContext;
+use Behat\Behat\Context\Context;
+use Behat\Behat\Hook\Scope\BeforeScenarioScope;
 
-class WidgetContext extends BehatContext
+class WidgetContext implements Context
 {
-    public function __construct(array $parameters)
+    private string $productName = 'Test Default Product Name';
+    private int $widgetSignatureVersion;
+    private string $widgetCode = 'p10';
+    private string $languageCode = '';
+    private \Paymentwall\Widget $widget;
+    private string $widgetHtmlContent;
+
+    private FeatureContext $featureContext;
+
+    #[\Behat\Hook\BeforeScenario]
+    public function gatherContexts(BeforeScenarioScope $scope)
     {
-        // Initialize your context here
-        $this->productName = 'Test Default Product Name';
-        $this->widgetSignatureVersion = null;
-        $this->widgetCode = 'p10';
-        $this->languageCode = null;
+        $environment = $scope->getEnvironment();
+
+        $this->featureContext = $environment->getContext(FeatureContext::class);
     }
 
-    protected function getWidgetSignatureVersion() {
-        return $this->widgetSignatureVersion;
-    }
-
-    protected function getUserId() {
-        return 'test_user';
-    }
-
-    protected function getWidgetCode() {
-        return $this->widgetCode;
-    }
-
-    protected function getLanguageCode() {
-        return $this->languageCode;
-    }
-
-    protected function getProduct() {
-        switch ($this->getMainContext()->apiType) {
-            case (Paymentwall_Base::API_GOODS):
+    protected function getProduct(): array
+    {
+        switch ($this->featureContext->apiType) {
+            case (\Paymentwall\Config::API_GOODS):
                 /**
                  * @todo implement subscriptions, trial, no product
                  */
-                return array(
-                    new Paymentwall_Product(
-                        'product301',                           
-                        9.99,                                   
-                        'USD',                                  
+                return [
+                    new Paymentwall\Product(
+                        'product301',
+                        9.99,
+                        'USD',
                         $this->productName,
-                        Paymentwall_Product::TYPE_FIXED
-                    )
-                );
+                        Paymentwall\Product::TYPE_FIXED
+                    ),
+                ];
 
-            case (Paymentwall_Base::API_VC):
-                return array();
+            case (\Paymentwall\Config::API_VC):
+                return [];
 
-            case (Paymentwall_Base::API_CART):
+            case (\Paymentwall\Config::API_CART):
                 /**
                  * @todo implement custom IDs and prices
                  */
-                return array();
+                return [];
         }
     }
 
-    /**
-     * @Given /^Widget signature version "([^"]*)"$/
-     */
-    public function widgetSignatureVersion($signatureVersion)
+    #[\Behat\Step\Given('Widget signature version ":signatureVersion"')]
+    public function widgetSignatureVersion(int $signatureVersion): void
     {
         $this->widgetSignatureVersion = $signatureVersion;
     }
 
-    /**
-     * @Given /^Widget code "([^"]*)"$/
-     */
-    public function widgetCode($widgetCode)
+    #[\Behat\Step\Given('Widget code ":widgetCode"')]
+    public function widgetCode(string $widgetCode): void
     {
         $this->widgetCode = $widgetCode;
     }
 
-    /**
-     * @Given /^Language code "([^"]*)"$/
-     */
-    public function languageCode($languageCode)
+    #[\Behat\Step\Given('Language code ":languageCode"')]
+    public function languageCode(string $languageCode): void
     {
         $this->languageCode = $languageCode;
     }
 
-    /**
-     * @Given /^Product name "([^"]*)"$/
-     */
-    public function productName($productName)
+    #[\Behat\Step\Given('Product name ":productName"')]
+    public function productName(string $productName): void
     {
         $this->productName = $productName;
     }
 
-    /**
-     * @When /^Widget is constructed$/
-     */
-    public function widgetIsConstructed()
+    #[\Behat\Step\When('Widget is constructed')]
+    public function widgetIsConstructed(): void
     {
-        $this->widget = new Paymentwall_Widget(
-            $this->getUserId(),
-            $this->getWidgetCode(),
+        $this->widget = new \Paymentwall\Widget(
+            'test_user',
+            $this->widgetCode,
             $this->getProduct(),
-            array(
-                'email' => 'user@hostname.com', 
-                'sign_version' => $this->getWidgetSignatureVersion(),
-                'lang' => $this->getLanguageCode()
-            )
+            [
+                'email' => 'user@hostname.com',
+                'sign_version' => $this->widgetSignatureVersion,
+                'lang' => $this->languageCode,
+            ]
         );
     }
 
-    /**
-     * @When /^Widget HTML content is loaded$/
-     */
-    public function widgetHtmlContentIsLoaded()
+    #[\Behat\Step\When('Widget HTML content is loaded')]
+    public function widgetHtmlContentIsLoaded(): void
     {
         $this->widgetHtmlContent = file_get_contents($this->widget->getUrl());
     }
 
-    /**
-     * @Then /^Widget HTML content should not contain "([^"]*)"$/
-     */
-    public function widgetHtmlContentShouldNotContain($phrase)
+    #[\Behat\Step\Then('Widget HTML content should not contain ":phrase"')]
+    public function widgetHtmlContentShouldNotContain($phrase): void
     {
-        if (strpos($this->widgetHtmlContent, $phrase) !== false) {
-            throw new Exception(
+        if (str_contains($this->widgetHtmlContent, $phrase)) {
+            throw new \Exception(
                 'Widget HTML content contains "' . $phrase . '"'
             );
         }
     }
 
-    /**
-     * @Then /^Widget HTML content should contain "([^"]*)"$/
-     */
-    public function widgetHtmlContentShouldContain($phrase)
+    #[\Behat\Step\Then('Widget HTML content should contain ":phrase"')]
+    public function widgetHtmlContentShouldContain($phrase): void
     {
-        if (strpos($this->widgetHtmlContent, $phrase) === false) {
-            throw new Exception(
-                'Widget HTML content doesn\'t contain "' . $phrase . '" (URL: ' . $this->widget->getUrl() .')'
+        if (!str_contains($this->widgetHtmlContent, $phrase)) {
+            throw new \Exception(
+                'Widget HTML content doesn\'t contain "' . $phrase . '" (URL: ' . $this->widget->getUrl() . ')'
             );
         }
     }
 
-    /**
-     * @Then /^Widget URL should not contain "([^"]*)"$/
-     */
-    public function widgetUrlShouldNotContain($phrase)
+    #[\Behat\Step\Then('Widget URL should not contain ":phrase"')]
+    public function widgetUrlShouldNotContain($phrase): void
     {
-        if (strpos($this->widget->getUrl(), $phrase) !== false) {
-            throw new Exception(
+        if (str_contains($this->widget->getUrl(), $phrase)) {
+            throw new \Exception(
                 'Widget URL contains "' . $phrase . '"'
             );
         }
     }
 
-    /**
-     * @Then /^Widget URL should contain "([^"]*)"$/
-     */
-    public function widgetUrlShouldContain($phrase)
+    #[\Behat\Step\Then('Widget URL should contain ":phrase"')]
+    public function widgetUrlShouldContain($phrase): void
     {
-        if (strpos($this->widget->getUrl(), $phrase) === false) {
-            throw new Exception(
-                'Widget URL doesn\'t contain "' . $phrase . '" (URL: ' . $this->widget->getUrl() .')'
+        if (!str_contains($this->widget->getUrl(), $phrase)) {
+            throw new \Exception(
+                'Widget URL doesn\'t contain "' . $phrase . '" (URL: ' . $this->widget->getUrl() . ')'
             );
         }
     }

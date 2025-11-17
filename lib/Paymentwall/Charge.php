@@ -1,71 +1,74 @@
 <?php
 
-class Paymentwall_Charge extends Paymentwall_ApiObject implements Paymentwall_ApiObjectInterface
+namespace Paymentwall;
+
+class Charge extends ApiObject implements ApiObjectInterface
 {
-	public $card;
-	
-	public function getId()
-	{
-		return $this->id;
-	}
+    public $card;
 
-	public function isTest()
-	{
-		return $this->test;
-	}
+    public function getId()
+    {
+        return $this->id;
+    }
 
-	public function isSuccessful()
-	{
-		return $this->object == self::API_OBJECT_CHARGE;
-	}
+    public function isTest()
+    {
+        return $this->test;
+    }
 
-	public function isCaptured()
-	{
-		return $this->captured;
-	}
+    public function isSuccessful(): bool
+    {
+        return $this->object == ApiObject::API_OBJECT_CHARGE;
+    }
 
-	public function isUnderReview()
-	{
-		return $this->risk == 'pending';
-	}
+    public function isCaptured()
+    {
+        return $this->captured;
+    }
 
-	public function isRefunded()
-	{
-		return $this->refunded;
-	}
+    public function isUnderReview(): bool
+    {
+        return $this->risk == 'pending';
+    }
 
-	public function setPropertiesFromResponse($response = '') {
-		parent::setPropertiesFromResponse($response);
-		$this->card = new Paymentwall_Card($this->card);
-	}
+    public function isRefunded()
+    {
+        return $this->refunded;
+    }
 
-	public function getEndpointName()
-	{
-		return self::API_OBJECT_CHARGE;
-	}
+    public function setPropertiesFromResponse(string $response = ''): void
+    {
+        parent::setPropertiesFromResponse($response);
+        $this->card = new Card($this->card);
+    }
 
-	public function getCard()
-	{
-		return new Paymentwall_Card($this->card);
-	}
+    public function getEndpointName(): string
+    {
+        return ApiObject::API_OBJECT_CHARGE;
+    }
 
-	public function get()
-	{
-		return $this->doApiAction('', 'get');
-	}
+    public function getCard(): Card
+    {
+        return new Card($this->card);
+    }
 
-	public function refund()
-	{
-		return $this->doApiAction('refund');
-	}
+    public function get(): self
+    {
+        return $this->doApiAction('', 'get');
+    }
 
-	public function capture()
-	{
-		return $this->doApiAction('capture');
-	}
+    public function refund(): self
+    {
+        return $this->doApiAction('refund');
+    }
 
-	public function void()
-	{
-		return $this->doApiAction('void');
-	}
+    public function capture(): self
+    {
+        return $this->doApiAction('capture');
+    }
+
+    public function void(): self
+    {
+        return $this->doApiAction('void');
+    }
 }

@@ -1,48 +1,47 @@
 <?php
 
-class Paymentwall_Signature_Widget extends Paymentwall_Signature_Abstract
+namespace Paymentwall\Signature;
+
+class Widget extends Signature
 {
-	public function process($params = [], $version = 0)
-	{
-		$baseString = '';
+    public function process(array $params = [], int $version = 0): string
+    {
+        $baseString = '';
 
-		if ($version == self::VERSION_ONE) {
+        if ($version == Signature::VERSION_ONE) {
+            $baseString .= $params['uid'] ?? '';
+            $baseString .= $this->getConfig()->getPrivateKey();
 
-			$baseString .= isset($params['uid']) ? $params['uid'] : '';
-			$baseString .= $this->getConfig()->getPrivateKey();
+            return md5($baseString);
+        } else {
+            Signature::ksortMultiDimensional($params);
 
-			return md5($baseString);
+            $baseString = $this->prepareParams($params, $baseString);
 
-		} else {
+            $baseString .= $this->getConfig()->getPrivateKey();
 
-			self::ksortMultiDimensional($params);
+            if ($version == Signature::VERSION_TWO) {
+                return md5($baseString);
+            }
 
-			$baseString = $this->prepareParams($params, $baseString);
+            return hash('sha256', $baseString);
+        }
+    }
 
-			$baseString .= $this->getConfig()->getPrivateKey();
-
-			if ($version == self::VERSION_TWO) {
-				return md5($baseString);
-			}
-
-			return hash('sha256', $baseString);
-		}
-	}
-
-	public function prepareParams($params = [], $baseString = '')
-	{
-		foreach ($params as $key => $value) {
-			if (!isset($value)) {
-				continue; 
-			}
-			if (is_array($value)) {
-				foreach ($value as $k => $v) {
-					$baseString .= $key . '[' . $k . ']' . '=' . ($v === false ? '0' : $v);
-				}
-			} else {
-				$baseString .= $key . '=' . ($value === false ? '0' : $value);
-			}
-		}
-		return $baseString;
-	}
+    public function prepareParams($params = [], $baseString = ''): string
+    {
+        foreach ($params as $key => $value) {
+            if (!isset($value)) {
+                continue;
+            }
+            if (is_array($value)) {
+                foreach ($value as $k => $v) {
+                    $baseString .= $key . '[' . $k . ']' . '=' . ($v === false ? '0' : $v);
+                }
+            } else {
+                $baseString .= $key . '=' . ($value === false ? '0' : $value);
+            }
+        }
+        return $baseString;
+    }
 }
